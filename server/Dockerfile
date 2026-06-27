@@ -5,7 +5,8 @@ WORKDIR /app
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
-RUN npm install -g pnpm
+# 固定 pnpm 10：pnpm 11.6+ 要求 Node ≥22.13（依赖 node:sqlite），与基础镜像 node:20 不兼容
+RUN npm install -g pnpm@10
 
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
