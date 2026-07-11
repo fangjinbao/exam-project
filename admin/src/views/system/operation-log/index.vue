@@ -95,8 +95,9 @@
   const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
   /** 操作类型标签颜色 */
-  function typeTagType(type: string) {
-    const map: Record<string, string> = {
+  type TagType = 'primary' | 'success' | 'info' | 'warning' | 'danger'
+  function typeTagType(type: string): TagType {
+    const map: Record<string, TagType> = {
       新增: 'success',
       编辑: 'warning',
       删除: 'danger',
