@@ -32,12 +32,11 @@ jobs:
       - uses: actions/checkout@v4
 
       # 与 admin/Dockerfile 保持一致：用 npm 容错安装（仓库 lock 与 package.json 存在漂移）
-      - name: 配置 Node 与 npm 缓存
+      # admin 仅有 pnpm-lock.yaml、无 package-lock.json，故不启用 npm 缓存（否则 setup-node 解析缓存路径失败）
+      - name: 配置 Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: admin/package-lock.json
 
       - name: 安装依赖
         run: npm install --no-audit --no-fund
