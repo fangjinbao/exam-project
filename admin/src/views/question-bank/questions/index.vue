@@ -126,21 +126,88 @@
             show-word-limit
           />
         </ElFormItem>
-        <ElFormItem v-if="isObjective" label="选项" prop="options">
-          <ElInput
-            v-model="form.options"
-            type="textarea"
-            :rows="4"
-            placeholder="每行一个选项，如：A. 选项一"
-            maxlength="2000"
-            show-word-limit
-          />
+        <!-- 单选/多选：动态选项 + 直接勾选正确答案 -->
+        <ElFormItem v-if="questionKind === 'choice'" label="选项" required>
+          <ElRadioGroup
+            v-if="form.type === 'single'"
+            v-model="singleAnswer"
+            class="option-editor"
+          >
+            <div v-for="(opt, idx) in optionList" :key="opt.id" class="option-row">
+              <span class="option-label">{{ optionLabel(idx) }}</span>
+              <ElInput
+                v-model="opt.content"
+                :placeholder="`选项 ${optionLabel(idx)} 内容`"
+                maxlength="500"
+                class="option-input"
+              />
+              <ElRadio :value="idx" class="option-mark">正确答案</ElRadio>
+              <ElButton
+                link
+                type="danger"
+                :icon="Delete"
+                :disabled="optionList.length <= 2"
+                @click="removeOption(idx)"
+              />
+            </div>
+            <ElButton
+              link
+              type="primary"
+              :icon="Plus"
+              :disabled="optionList.length >= 8"
+              @click="addOption"
+            >
+              添加选项
+            </ElButton>
+          </ElRadioGroup>
+          <div v-else class="option-editor">
+            <div v-for="(opt, idx) in optionList" :key="opt.id" class="option-row">
+              <span class="option-label">{{ optionLabel(idx) }}</span>
+              <ElInput
+                v-model="opt.content"
+                :placeholder="`选项 ${optionLabel(idx)} 内容`"
+                maxlength="500"
+                class="option-input"
+              />
+              <ElCheckbox
+                :model-value="multipleAnswer.includes(idx)"
+                class="option-mark"
+                @change="toggleMultiple(idx)"
+              >
+                正确答案
+              </ElCheckbox>
+              <ElButton
+                link
+                type="danger"
+                :icon="Delete"
+                :disabled="optionList.length <= 2"
+                @click="removeOption(idx)"
+              />
+            </div>
+            <ElButton
+              link
+              type="primary"
+              :icon="Plus"
+              :disabled="optionList.length >= 8"
+              @click="addOption"
+            >
+              添加选项
+            </ElButton>
+          </div>
         </ElFormItem>
-        <ElFormItem label="标准答案" prop="answer">
+        <!-- 判断题：固定正确/错误 -->
+        <ElFormItem v-else-if="questionKind === 'judge'" label="答案" required>
+          <ElRadioGroup v-model="judgeAnswer">
+            <ElRadio value="正确">正确</ElRadio>
+            <ElRadio value="错误">错误</ElRadio>
+          </ElRadioGroup>
+        </ElFormItem>
+        <!-- 填空/问答/论述：文本答案 -->
+        <ElFormItem v-else-if="questionKind === 'text'" label="标准答案" required>
           <ElInput
             v-model="form.answer"
             type="textarea"
-            :rows="2"
+            :rows="3"
             placeholder="请输入标准答案"
             maxlength="2000"
             show-word-limit
@@ -243,9 +310,6 @@
   })
   const bankName = computed(() => (route.query.name as string) || '')
 
-  // 客观题题型（选项必填），与后端 OBJECTIVE_TYPES 对齐
-  const OBJECTIVE_TYPES = ['single', 'multiple', 'judge', 'blank']
-
   const loading = ref(false)
   const tableData = ref<Question[]>([])
   const selectedIds = ref<number[]>([])
@@ -291,18 +355,66 @@
   })
   const form = reactive<QuestionPayload & { id?: number }>(createForm())
 
-  // 当前题型是否客观题（决定选项框显隐与必填）
-  const isObjective = computed(() => OBJECTIVE_TYPES.includes(form.type))
+  // 选择题动态选项与答案（choice 用 optionList + single/multipleAnswer；judge 用 judgeAnswer）
+  // 每项带稳定 id 作 v-for key，避免 splice 删除中间项后输入框焦点错位
+  let optionUid = 0
+  const makeOption = (content = ''): { id: number; content: string } => ({ id: ++optionUid, content })
+  const optionList = ref<{ id: number; content: string }[]>([makeOption(), makeOption()])
+  const singleAnswer = ref<number | undefined>(undefined) // 单选：正确选项索引
+  const multipleAnswer = ref<number[]>([]) // 多选：正确选项索引集合
+  const judgeAnswer = ref<string>('') // 判断题：正确/错误
+
+  /**
+   * 题型分类：
+   * - none：尚未选择题型，不展示任何答案编辑区
+   * - choice：单选/多选，动态选项 + 勾选答案
+   * - judge：判断题，固定正确/错误
+   * - text：填空/问答/论述，纯文本答案
+   */
+  const questionKind = computed<'none' | 'choice' | 'judge' | 'text'>(() => {
+    if (!form.type) return 'none'
+    if (form.type === 'single' || form.type === 'multiple') return 'choice'
+    if (form.type === 'judge') return 'judge'
+    return 'text'
+  })
+
+  /** 选项索引 → 字母标签（0→A, 1→B …） */
+  function optionLabel(idx: number): string {
+    return String.fromCharCode(65 + idx)
+  }
+
+  /** 新增一个空选项（上限 8） */
+  function addOption() {
+    if (optionList.value.length >= 8) return
+    optionList.value.push(makeOption())
+  }
+
+  /** 删除选项并同步维护答案索引（下限 2） */
+  function removeOption(idx: number) {
+    if (optionList.value.length <= 2) return
+    optionList.value.splice(idx, 1)
+    // 单选：清除或前移答案索引
+    if (singleAnswer.value === idx) singleAnswer.value = undefined
+    else if (singleAnswer.value !== undefined && singleAnswer.value > idx) singleAnswer.value -= 1
+    // 多选：移除该索引并将更大的索引前移
+    multipleAnswer.value = multipleAnswer.value
+      .filter((i) => i !== idx)
+      .map((i) => (i > idx ? i - 1 : i))
+  }
+
+  /** 多选答案勾选切换 */
+  function toggleMultiple(idx: number) {
+    const set = new Set(multipleAnswer.value)
+    if (set.has(idx)) set.delete(idx)
+    else set.add(idx)
+    multipleAnswer.value = Array.from(set).sort((a, b) => a - b)
+  }
 
   const formRules = computed<FormRules>(() => ({
     type: [{ required: true, message: '请选择题型', trigger: 'change' }],
     stem: [{ required: true, message: '请输入题干', trigger: 'blur' }],
-    answer: [{ required: true, message: '请输入标准答案', trigger: 'blur' }],
     difficulty: [{ required: true, message: '请选择难度', trigger: 'change' }],
-    knowledgePointId: [{ required: true, message: '请选择知识点', trigger: 'change' }],
-    options: isObjective.value
-      ? [{ required: true, message: '客观题必须填写选项', trigger: 'blur' }]
-      : []
+    knowledgePointId: [{ required: true, message: '请选择知识点', trigger: 'change' }]
   }))
 
   /** 由字典 value 取显示名 */
@@ -391,9 +503,38 @@
     dialogVisible.value = true
   }
 
+  /** 解析已存选项文本为选项内容数组（去掉「A. 」前缀） */
+  function parseOptions(text?: string | null): string[] {
+    if (!text) return []
+    return text
+      .split('\n')
+      .map((line) => line.replace(/^\s*[A-Za-z]\s*[.．、:：]\s*/, '').trim())
+      .filter((line) => line.length > 0)
+  }
+
+  /**
+   * 答案字母 → 选项索引数组（去重、按出现顺序）。
+   * 直接提取所有 A-Z 字母，兼容历史自由文本的各种写法：
+   * "A,C" / "A，C" / "A、C" / "AC" / "A C" 均可正确回填。
+   */
+  function answerLettersToIndexes(answer?: string | null): number[] {
+    if (!answer) return []
+    const letters = answer.toUpperCase().match(/[A-Z]/g) ?? []
+    const seen = new Set<number>()
+    const result: number[] = []
+    for (const ch of letters) {
+      const idx = ch.charCodeAt(0) - 65
+      if (!seen.has(idx)) {
+        seen.add(idx)
+        result.push(idx)
+      }
+    }
+    return result
+  }
+
   function handleEdit(row: Question) {
     isEditing.value = true
-    dialogVisible.value = true
+    resetOptionState()
     Object.assign(form, {
       id: row.id,
       stem: row.stem,
@@ -405,6 +546,21 @@
       knowledgePointId: row.knowledgePointId,
       suggestedScore: row.suggestedScore ?? undefined
     })
+    // 按题型回填结构化编辑器
+    if (row.type === 'single' || row.type === 'multiple') {
+      // 保留已解析出的选项内容，不足 2 条时补齐空选项（避免历史脏数据整体丢弃原内容）
+      const contents = parseOptions(row.options)
+      const opts = contents.map((c) => makeOption(c))
+      while (opts.length < 2) opts.push(makeOption())
+      optionList.value = opts
+      // 过滤越界字母索引（历史脏数据里答案字母可能超出实际选项数量，如只有 A/B/C 却存了 D）
+      const idxes = answerLettersToIndexes(row.answer).filter((i) => i < opts.length)
+      if (row.type === 'single') singleAnswer.value = idxes[0]
+      else multipleAnswer.value = idxes
+    } else if (row.type === 'judge') {
+      judgeAnswer.value = row.answer === '正确' || row.answer === '错误' ? row.answer : ''
+    }
+    dialogVisible.value = true
   }
 
   async function handleDetail(row: Question) {
@@ -480,15 +636,64 @@
     }
   }
 
+  /**
+   * 按题型组装 options/answer 文本并校验：
+   * - choice：选项非空、单选选一项/多选至少一项，options 存「A. 内容」多行，answer 存字母（A 或 A,C）
+   * - judge：answer 为 正确/错误，options 存「正确\n错误」满足后端客观题选项非空约束
+   * - text：answer 为文本，options 置空（后端 blank 视为客观题但此处 blank 归 text，用答案兜底选项非空）
+   * @returns { options, answer } 或 null（校验不通过，已弹提示）
+   */
+  function buildOptionsAndAnswer(): { options?: string; answer: string } | null {
+    if (questionKind.value === 'choice') {
+      const contents = optionList.value.map((o) => o.content.trim())
+      if (contents.some((c) => !c)) {
+        ElMessage.warning('选项内容不能为空')
+        return null
+      }
+      const options = contents.map((c, i) => `${optionLabel(i)}. ${c}`).join('\n')
+      if (form.type === 'single') {
+        if (singleAnswer.value === undefined) {
+          ElMessage.warning('请勾选正确答案')
+          return null
+        }
+        return { options, answer: optionLabel(singleAnswer.value) }
+      }
+      // multiple
+      if (!multipleAnswer.value.length) {
+        ElMessage.warning('多选题请至少勾选一个正确答案')
+        return null
+      }
+      return { options, answer: multipleAnswer.value.map((i) => optionLabel(i)).join(',') }
+    }
+    if (questionKind.value === 'judge') {
+      if (!judgeAnswer.value) {
+        ElMessage.warning('请选择判断题答案')
+        return null
+      }
+      return { options: '正确\n错误', answer: judgeAnswer.value }
+    }
+    // text：填空/问答/论述
+    const ans = form.answer?.trim()
+    if (!ans) {
+      ElMessage.warning('请输入标准答案')
+      return null
+    }
+    // blank 后端归客观题，选项必须非空：用答案兜底；qa/essay 免填选项
+    const options = form.type === 'blank' ? ans : undefined
+    return { options, answer: ans }
+  }
+
   async function handleSubmit() {
     try {
       await formRef.value?.validate()
+      const built = buildOptionsAndAnswer()
+      if (!built) return
       submitLoading.value = true
       const payload: QuestionPayload = {
         stem: form.stem.trim(),
         type: form.type,
-        options: isObjective.value ? form.options?.trim() || undefined : undefined,
-        answer: form.answer.trim(),
+        options: built.options,
+        answer: built.answer,
         analysis: form.analysis?.trim() || undefined,
         difficulty: form.difficulty,
         knowledgePointId: form.knowledgePointId,
@@ -511,9 +716,18 @@
     }
   }
 
+  /** 重置动态选项/答案编辑器状态 */
+  function resetOptionState() {
+    optionList.value = [makeOption(), makeOption()]
+    singleAnswer.value = undefined
+    multipleAnswer.value = []
+    judgeAnswer.value = ''
+  }
+
   function resetForm() {
     formRef.value?.resetFields()
     Object.assign(form, createForm())
+    resetOptionState()
   }
 
   onMounted(() => {
@@ -602,6 +816,41 @@
       white-space: pre-wrap;
       word-break: break-word;
       font-family: inherit;
+    }
+
+    .option-editor {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      .option-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+
+        .option-label {
+          flex-shrink: 0;
+          width: 22px;
+          height: 22px;
+          line-height: 22px;
+          text-align: center;
+          font-size: var(--el-font-size-base);
+          font-weight: 600;
+          border-radius: 50%;
+          background: var(--el-fill-color-light);
+        }
+
+        .option-input {
+          flex: 1;
+        }
+
+        .option-mark {
+          flex-shrink: 0;
+          margin-right: 0;
+        }
+      }
     }
   }
 </style>

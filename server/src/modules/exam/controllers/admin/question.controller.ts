@@ -171,7 +171,9 @@ export class QuestionController extends CrudControllerFactory(QuestionVo) {
   @ApiOkVoid()
   async batchDelete(@Body() body: { ids: number[] }) {
     const ids = body?.ids;
-    if (!Array.isArray(ids) || !ids.length) return this.fail('请选择要删除的题目');
+    if (!Array.isArray(ids) || !ids.length || !ids.every((id) => typeof id === 'number')) {
+      return this.fail('请选择要删除的题目');
+    }
     try {
       for (const id of ids) await this.questionService.ensureDeletable(id);
     } catch (error) {
