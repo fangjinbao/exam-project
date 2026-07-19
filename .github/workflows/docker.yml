@@ -15,9 +15,71 @@ on:
 env:
   REGISTRY: ghcr.io
 
+# 同一时刻只跑一条，避免自动提交迁移时并发冲突
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  # 前置：自动补迁移。改了 schema.prisma 后，这里自动生成迁移文件并提交回 main。
+  # 危险操作（删表/删列/改类型/加非空无默认列）会拦截报红，绝不自动上生产。
+  auto-migrate:
+    name: 自动补 Prisma 迁移
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 需要把自动生成的迁移文件提交回仓库
+    services:
+      shadow-db:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: shadow
+          MYSQL_DATABASE: shadow
+        ports:
+          - 33071:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h127.0.0.1 -uroot -pshadow"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 配置 Node 与 pnpm 缓存
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        working-directory: server
+
+      - name: 自动比对并补迁移
+        id: automig
+        run: bash scripts/ci-auto-migrate.sh
+        working-directory: server
+        env:
+          SHADOW_DATABASE_URL: "mysql://root:shadow@127.0.0.1:33071/shadow"
+
+      - name: 提交迁移文件回 main
+        if: steps.automig.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add server/prisma/migrations
+          git commit -m "chore(db): 自动生成迁移 ${{ steps.automig.outputs.migration_dir }} [skip ci]"
+          git push origin main
+
   build-and-push:
     name: 构建并推送镜像
+    needs: auto-migrate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,7 +94,10 @@ jobs:
           - name: server
             dockerfile: docker/server.Dockerfile
     steps:
+      # 拉取 main 最新代码：auto-migrate 若刚提交了迁移文件，这里要包含进来再构建镜像
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       # 镜像名固定小写：ghcr.io/<owner>/agentpm-<gateway|server>（用 tr 转小写，兼容所有 shell）
       - name: 生成镜像名（owner 转小写）

@@ -1,6 +1,5 @@
 import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { execSync } from 'child_process';
 import { PrismaService } from './prisma.service';
 import { SeedService } from './seed.service';
 import { PermsSyncService } from './perms-sync.service';
@@ -26,10 +25,10 @@ export class BootstrapService implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     const env = this.config.get<string>('NODE_ENV', 'development');
     if (env === 'production') {
-      this.migrate();
+      // 迁移已由容器 entrypoint.sh 在应用启动前执行（prisma migrate deploy），此处不再重复
       await this.seedIfEmpty();
     } else {
-      this.logger.log('非生产环境，跳过迁移与种子初始化（开发请用 pnpm setup）');
+      this.logger.log('非生产环境，跳过种子初始化（开发请用 pnpm setup）');
     }
 
     // 权限点自动同步：所有环境执行，在 seed 之后（按钮需挂到已存在的菜单下）
@@ -45,24 +44,6 @@ export class BootstrapService implements OnApplicationBootstrap {
     } catch (e) {
       // 权限同步失败不应导致服务无法启动，记录错误待人工排查
       this.logger.error(`权限点自动同步失败: ${(e as Error).message}`);
-    }
-  }
-
-  /**
-   * 应用数据库迁移（migrate deploy，幂等：已应用的迁移自动跳过）
-   * @throws 迁移失败时抛出，阻止应用启动（fail-fast，避免连接未就绪的库对外提供服务）
-   */
-  private migrate(): void {
-    try {
-      this.logger.log('执行数据库迁移 prisma migrate deploy...');
-      // 直接调本地 CLI，避免 npx 在网络受限容器中的包解析不确定性
-      execSync('node node_modules/prisma/build/index.js migrate deploy', {
-        stdio: 'inherit',
-      });
-      this.logger.log('数据库迁移完成');
-    } catch (e) {
-      this.logger.error(`数据库迁移失败: ${(e as Error).message}`);
-      throw e;
     }
   }
 

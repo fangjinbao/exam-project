@@ -205,7 +205,7 @@ docker compose up -d         # 滚动重启有变化的容器
 docker compose ps            # 确认状态
 ```
 
-- 数据库结构变更由后端启动时自动 `prisma migrate deploy`，无需手动。宝塔站点配置也不用动。
+- 数据库结构变更**全自动**，无需手动敲迁移命令。原理见「六、改表 / 加字段怎么办」。宝塔站点配置也不用动。
 - **回滚**：把 `.env` 里 `IMAGE_TAG` 从 `latest` 改成历史 `sha-` 标签（GitHub 仓库 → Packages 里查），再 `docker compose pull && docker compose up -d`。
 
 ---
@@ -337,6 +337,40 @@ docker compose ps
 5. **重新部署**：方式一 push 后 `docker compose pull && up -d`；方式二 `git pull && docker compose up -d --build`。
 
 还是那 4 个容器（gateway 仍是 1 个），只是网关内部多监听一个端口。网关配置、CI、nginx 模板都不用改。
+
+---
+
+# 六、改表 / 加字段怎么办（全自动，不用敲迁移命令）
+
+加了功能、改了数据库结构（新表、新字段）时，你**只需要改代码 + push**，剩下全自动：
+
+```
+① 改 server/prisma/schema.prisma（加 model 或加 field）
+② 一起改业务代码，git push 到 main
+③ 之后什么都不用做——CI 自动补迁移、建镜像；服务器 pull 后自动建表
+```
+
+## 背后是怎么自动的
+
+push 到 main 后，`Docker` 这个 Actions 工作流会先跑一个 `auto-migrate` 步骤：
+
+1. 起一个临时空数据库，比对「已有迁移」和「你改后的 `schema.prisma`」的差异。
+2. 差异是**安全的**（加表、加可空字段、加索引）→ 自动生成迁移文件、提交回仓库，然后照常构建镜像。
+3. 差异是**危险的**（删表、删列、改字段类型、加"非空且无默认值"的列）→ **CI 直接报红拦住**，不会构建、不会上线。
+
+这道拦截是**保护生产数据**的：危险改动可能删掉或改坏已有数据，必须人工确认。遇到 CI 报红时，本地执行下面这条，人工审查生成的迁移 SQL（确认对存量数据的处理没问题）后再提交：
+
+```bash
+cd server
+pnpm prisma migrate dev --name 你的改动描述   # 生成迁移文件，会提示你确认
+git add prisma/migrations && git commit -m "feat: xxx" && git push
+```
+
+## 一条铁律
+
+改了 `schema.prisma` 后，**永远别用 `prisma db push`**（它直接改库、不留迁移文件，会导致"本地正常、线上缺表"）。要么让 CI 自动补（安全改动），要么本地 `migrate dev`（危险改动）。
+
+> **危险改动上线前务必先备份数据库**（见「2.2 功能升级」里的 `mysqldump` 命令）。
 
 ---
 
