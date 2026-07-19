@@ -244,6 +244,7 @@
     },
     "questionBank": {
       "title": "题库管理",
+      "list": "题库列表",
       "knowledgePoint": "知识点分类"
     },
     "system": {

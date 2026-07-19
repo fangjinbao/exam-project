@@ -47,12 +47,17 @@ export class QuestionController extends CrudControllerFactory(QuestionVo) {
       typeof query.knowledgePointId === 'string' && /^\d+$/.test(query.knowledgePointId)
         ? Number(query.knowledgePointId)
         : undefined;
+    const bankId =
+      typeof query.questionBankId === 'string' && /^\d+$/.test(query.questionBankId)
+        ? Number(query.questionBankId)
+        : undefined;
     const data = await this.questionService.pageWithKnowledge(
       {
         keyword: query.keyword,
         type: query.type,
         difficulty: query.difficulty,
         knowledgePointId: kpId,
+        questionBankId: bankId,
         status: query.status,
       },
       query.page ? Number(query.page) : undefined,
@@ -86,6 +91,12 @@ export class QuestionController extends CrudControllerFactory(QuestionVo) {
     }
     if (!(await this.questionService.isKnowledgePointExists(dto.knowledgePointId))) {
       return '所属知识点不存在';
+    }
+    if (
+      dto.questionBankId != null &&
+      !(await this.questionService.isQuestionBankExists(dto.questionBankId))
+    ) {
+      return '所属题库不存在';
     }
     if (this.questionService.isObjectiveType(dto.type) && !dto.options?.trim()) {
       return '客观题必须填写选项';
@@ -147,6 +158,27 @@ export class QuestionController extends CrudControllerFactory(QuestionVo) {
     }
     await this.questionService.delete([id]);
     return this.ok(null, '删除题目成功');
+  }
+
+  /**
+   * 批量删除题目
+   * 任一题目被固定试卷引用时整体阻止（试卷模块落地后生效）。
+   */
+  @Post('batch-delete')
+  @Perms('batch-delete')
+  @ApiOperation({ summary: '批量删除题目（任一被试卷引用时整体阻止）' })
+  @OperationLog({ target: '题目管理', type: '删除', content: '批量删除题目' })
+  @ApiOkVoid()
+  async batchDelete(@Body() body: { ids: number[] }) {
+    const ids = body?.ids;
+    if (!Array.isArray(ids) || !ids.length) return this.fail('请选择要删除的题目');
+    try {
+      for (const id of ids) await this.questionService.ensureDeletable(id);
+    } catch (error) {
+      return this.fail(error instanceof Error ? error.message : '无法删除');
+    }
+    await this.questionService.delete(ids);
+    return this.ok(null, `已删除 ${ids.length} 道题目`);
   }
 
   /**

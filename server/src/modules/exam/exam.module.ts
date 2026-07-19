@@ -8,6 +8,8 @@ import { KnowledgePointController } from './controllers/admin/knowledge-point.co
 import { KnowledgePointService } from './services/knowledge-point.service';
 import { QuestionController } from './controllers/admin/question.controller';
 import { QuestionService } from './services/question.service';
+import { QuestionBankController } from './controllers/admin/question-bank.controller';
+import { QuestionBankService } from './services/question-bank.service';
 
 /**
  * 考试域模块（exam）
@@ -21,12 +23,14 @@ import { QuestionService } from './services/question.service';
     ExternalOrgController,
     KnowledgePointController,
     QuestionController,
+    QuestionBankController,
   ],
   providers: [
     ExternalCandidateService,
     ExternalOrgService,
     KnowledgePointService,
     QuestionService,
+    QuestionBankService,
   ],
 })
 export class ExamModule {}

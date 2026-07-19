@@ -33,6 +33,9 @@ export class QuestionVo {
   @ApiProperty({ description: '所属知识点名称', nullable: true })
   knowledgePointName?: string | null;
 
+  @ApiProperty({ description: '所属题库 ID', nullable: true })
+  questionBankId?: number | null;
+
   @ApiProperty({ description: '分值建议', nullable: true })
   suggestedScore: number | null;
 

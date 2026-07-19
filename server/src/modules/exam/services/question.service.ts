@@ -53,6 +53,19 @@ export class QuestionService extends BaseService {
   }
 
   /**
+   * 校验题库是否存在
+   * @param id 题库 ID
+   * @returns 存在返回 true
+   */
+  async isQuestionBankExists(id: number): Promise<boolean> {
+    const bank = await this.prisma.questionBank.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    return !!bank;
+  }
+
+  /**
    * 分页查询题目（带知识点名称）
    * keyword 模糊匹配题干；type/difficulty/knowledgePointId/status 精确筛选。
    * @param filter 筛选条件
@@ -66,6 +79,7 @@ export class QuestionService extends BaseService {
       type?: string;
       difficulty?: string;
       knowledgePointId?: number;
+      questionBankId?: number;
       status?: string;
     },
     page?: number,
@@ -80,6 +94,7 @@ export class QuestionService extends BaseService {
     if (filter.type) where.type = filter.type;
     if (filter.difficulty) where.difficulty = filter.difficulty;
     if (filter.knowledgePointId) where.knowledgePointId = filter.knowledgePointId;
+    if (filter.questionBankId) where.questionBankId = filter.questionBankId;
     if (filter.status) where.status = filter.status;
 
     const [rows, total] = await Promise.all([

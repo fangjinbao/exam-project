@@ -120,6 +120,7 @@ export class SeedService {
       icon?: string;
       orderNum: number;
       parentId?: number;
+      isShow?: number;
     }) => {
       const found = await this.prisma.sysMenu.findFirst({ where: { router: data.router } });
       if (found) {
@@ -134,6 +135,7 @@ export class SeedService {
             icon: data.icon ?? null,
             orderNum: data.orderNum,
             parentId: data.parentId ?? null,
+            isShow: data.isShow ?? 1,
           },
         });
       }
@@ -158,9 +160,14 @@ export class SeedService {
     // 4) 考点管理：单页一级菜单（type1 无父目录，视图为顶层单页）
     await ensure({ name: '考点管理', type: 1, router: '/exam-site', perms: 'sys:exam-site:list', icon: 'Location', orderNum: 5 });
 
-    // 5) 题库管理：目录 + 「知识点分类」子菜单（router 与前端 views/question-bank 层级一致）
+    // 5) 题库管理：目录 + 「题库列表」「知识点分类」子菜单（router 与前端 views/question-bank 层级一致）
     const questionBankDir = await ensure({ name: '题库管理', type: 0, router: '/question-bank', icon: 'Collection', orderNum: 2 });
-    await ensure({ name: '知识点分类', type: 1, router: '/question-bank/knowledge-point', perms: 'exam:knowledge-point:list', orderNum: 1, parentId: questionBankDir.id });
+    await ensure({ name: '题库列表', type: 1, router: '/question-bank/list', perms: 'exam:question-bank:list', orderNum: 1, parentId: questionBankDir.id });
+    await ensure({ name: '知识点分类', type: 1, router: '/question-bank/knowledge-point', perms: 'exam:knowledge-point:list', orderNum: 2, parentId: questionBankDir.id });
+    // 题目管理为「进入题库」后的子页（带 bankId query），侧边栏隐藏（isShow=0）。
+    // 其 type=1 + perms=exam:question:list 作为 perms-sync 挂 add/update/delete/detail/audit/batch-delete 按钮的父节点，
+    // 前端 v-auth 依赖该菜单 meta.authList 才能显示操作按钮。
+    await ensure({ name: '题目管理', type: 1, router: '/question-bank/questions', perms: 'exam:question:list', orderNum: 3, parentId: questionBankDir.id, isShow: 0 });
 
     this.logger.log('导航菜单（系统管理/外部考生/考点/题库）已初始化');
   }
@@ -221,14 +228,9 @@ export class SeedService {
     this.logger.log('AI 模型配置已初始化');
   }
 
-  /** 初始化数据字典（类型 + 字典项）；已存在则跳过 */
+  /** 初始化数据字典（类型 + 字典项）；按 key/value 幂等，缺失才补，已存在不覆盖 */
   private async seedDict(): Promise<void> {
-    const existing = await this.prisma.dictType.count();
-    if (existing > 0) {
-      this.logger.log('数据字典已存在，跳过初始化');
-      return;
-    }
-    // 类型：name→前端 typeName，key→前端 typeCode
+    // 类型：name→前端 typeName，key→前端 typeCode。按 key 幂等（缺则建）
     const types = [
       { key: 'question_type', name: '题型' },
       { key: 'difficulty', name: '难度' },
@@ -237,8 +239,9 @@ export class SeedService {
     ];
     const keyToId: Record<string, number> = {};
     for (const t of types) {
-      const created = await this.prisma.dictType.create({ data: t });
-      keyToId[t.key] = created.id;
+      const found = await this.prisma.dictType.findFirst({ where: { key: t.key } });
+      const row = found ?? (await this.prisma.dictType.create({ data: t }));
+      keyToId[t.key] = row.id;
     }
     // 字典项：orderNum→前端 sort，referenced 标记引用保护
     const items = [
@@ -261,9 +264,15 @@ export class SeedService {
       { key: 'operation_type', name: '删除', value: 'delete', orderNum: 3, status: 1, referenced: false },
       { key: 'operation_type', name: '登录', value: 'login', orderNum: 4, status: 1, referenced: false },
     ];
-    await this.prisma.dictInfo.createMany({
-      data: items.map(({ key, ...rest }) => ({ ...rest, typeId: keyToId[key] })),
-    });
-    this.logger.log('数据字典已初始化');
+    // 逐项按 (typeId,value) 幂等：已存在跳过，缺失才补，避免重复插入
+    let added = 0;
+    for (const { key, ...rest } of items) {
+      const typeId = keyToId[key];
+      const exists = await this.prisma.dictInfo.findFirst({ where: { typeId, value: rest.value } });
+      if (exists) continue;
+      await this.prisma.dictInfo.create({ data: { ...rest, typeId } });
+      added++;
+    }
+    this.logger.log(`数据字典已初始化（新增字典项 ${added} 个）`);
   }
 }

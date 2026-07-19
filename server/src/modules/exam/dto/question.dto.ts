@@ -53,6 +53,12 @@ export class CreateQuestionDto {
   @IsPositive()
   knowledgePointId: number;
 
+  @ApiProperty({ description: '所属题库 ID', required: false })
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  questionBankId?: number;
+
   @ApiProperty({ description: '分值建议（正整数）', required: false })
   @IsOptional()
   @IsInt()

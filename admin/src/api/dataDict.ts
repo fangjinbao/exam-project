@@ -105,11 +105,33 @@ export function deleteDictItem(id: number) {
   })
 }
 
+/** 按 key 批量取字典时的单个字典项（业务下拉数据源结构） */
+export interface DictDataItem {
+  id: number
+  name: string
+  value: string
+  status: number
+  orderNum: number
+}
+
+/**
+ * 按字典类型 key 批量获取字典项（开放接口，无需鉴权）
+ * 返回以 key 分组的字典项映射，如 { question_type: [...], difficulty: [...] }
+ */
+export function getDictData(keys: string[]) {
+  return request.post<Record<string, DictDataItem[]>>({
+    url: '/admin/dict/info/data',
+    data: { keys },
+    showErrorMessage: false
+  })
+}
+
 /** 数据字典 API 聚合导出 */
 export const dataDictApi = {
   getTypeList: getDictTypeList,
   getItemList: getDictItemList,
   addItem: addDictItem,
   updateItem: updateDictItem,
-  deleteItem: deleteDictItem
+  deleteItem: deleteDictItem,
+  getData: getDictData
 }

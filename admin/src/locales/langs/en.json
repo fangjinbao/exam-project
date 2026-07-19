@@ -244,6 +244,7 @@
     },
     "questionBank": {
       "title": "Question Bank",
+      "list": "Question Banks",
       "knowledgePoint": "Knowledge Points"
     },
     "system": {

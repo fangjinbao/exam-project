@@ -556,27 +556,27 @@ model SysParamConfig {
 
 /// AI 模型配置（apiKey 为敏感字段，接口下发时脱敏，不返回完整密钥）
 model SysAiModel {
-  id             Int      @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   /// 配置名称（全局唯一）
-  name           String   @unique @db.VarChar(100)
+  name       String   @unique @db.VarChar(100)
   /// 模型服务商：OpenAI / Anthropic
-  provider       String   @db.VarChar(50)
+  provider   String   @db.VarChar(50)
   /// 模型名称
-  model          String   @db.VarChar(100)
+  model      String   @db.VarChar(100)
   /// 接口地址（base url，如 https://api.openai.com/v1）
-  apiUrl         String   @db.VarChar(500)
+  apiUrl     String   @db.VarChar(500)
   /// 接口密钥（敏感，仅存储，不下发完整值）
-  apiKey         String   @db.VarChar(500)
+  apiKey     String   @db.VarChar(500)
   /// 启用状态 1=启用 0=停用（全局仅一项启用）
-  status         Int      @default(0)
+  status     Int      @default(0)
   /// 连接状态：normal 正常 / error 异常 / unknown 未测试
-  connStatus     String   @default("unknown") @db.VarChar(20)
+  connStatus String   @default("unknown") @db.VarChar(20)
   /// 租户 ID
-  tenantId       Int?
+  tenantId   Int?
   /// 创建时间
-  createTime     DateTime @default(now())
+  createTime DateTime @default(now())
   /// 更新时间
-  updateTime     DateTime @updatedAt
+  updateTime DateTime @updatedAt
 
   @@index([tenantId])
   @@map("sys_ai_model")
@@ -646,32 +646,32 @@ model ExternalOrg {
 
 /// 外部考生（外部单位参加考试人员，由系统生成考试账号；password/passwordV 为敏感字段，不对外返回）
 model ExternalCandidate {
-  id           Int      @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   /// 姓名
-  name         String   @db.VarChar(50)
+  name       String   @db.VarChar(50)
   /// 所属外部单位 ID（必填，指向已启用的 ExternalOrg）
-  orgId        Int
+  orgId      Int
   /// 证件号（用于身份核验，可空）
-  idCard       String?  @db.VarChar(30)
+  idCard     String?  @db.VarChar(30)
   /// 联系电话（手机号，同时作为考试账号登录名，系统内全局唯一）
-  phone        String   @unique @db.VarChar(20)
+  phone      String   @unique @db.VarChar(20)
   /// 电子邮箱（可空）
-  email        String?  @db.VarChar(50)
+  email      String?  @db.VarChar(50)
   /// 考试账号密码（bcrypt 哈希，敏感，不对外返回）
-  password     String
+  password   String
   /// 密码版本号（重置密码后自增，使旧登录态失效，敏感，不对外返回）
-  passwordV    Int      @default(1)
+  passwordV  Int      @default(1)
   /// 账号状态 1=启用 0=停用（停用后不可登录考生端）
-  status       Int      @default(1)
+  status     Int      @default(1)
   /// 租户 ID
-  tenantId     Int?
+  tenantId   Int?
   /// 创建时间
-  createTime   DateTime @default(now())
+  createTime DateTime @default(now())
   /// 更新时间
-  updateTime   DateTime @updatedAt
+  updateTime DateTime @updatedAt
 
   /// 所属外部单位（多对一）
-  org          ExternalOrg @relation(fields: [orgId], references: [id])
+  org ExternalOrg @relation(fields: [orgId], references: [id])
 
   @@index([orgId])
   @@index([tenantId])
@@ -723,7 +723,7 @@ model KnowledgePoint {
   updateTime DateTime @updatedAt
 
   /// 关联的题目（一对多）
-  questions  Question[]
+  questions Question[]
 
   @@index([parentId])
   @@index([tenantId])
@@ -747,6 +747,8 @@ model Question {
   difficulty       String   @db.VarChar(20)
   /// 所属知识点 ID（指向 KnowledgePoint）
   knowledgePointId Int
+  /// 所属题库 ID（指向 QuestionBank，可空以兼容存量题目；新题目应归属题库）
+  questionBankId   Int?
   /// 分值建议（可空，正整数）
   suggestedScore   Int?
   /// 状态：formal 正式 / pending 待审（AI 生成题目审核通过前保持 pending）
@@ -761,9 +763,12 @@ model Question {
   updateTime       DateTime @updatedAt
 
   /// 所属知识点（多对一）
-  knowledgePoint   KnowledgePoint @relation(fields: [knowledgePointId], references: [id])
+  knowledgePoint KnowledgePoint @relation(fields: [knowledgePointId], references: [id])
+  /// 所属题库（多对一，可空）
+  questionBank   QuestionBank?  @relation(fields: [questionBankId], references: [id])
 
   @@index([knowledgePointId])
+  @@index([questionBankId])
   @@index([type])
   @@index([difficulty])
   @@index([status])
@@ -771,3 +776,27 @@ model Question {
   @@map("exam_question")
 }
 
+/// 题库（题目容器，按业务主题划分，如"安全教育题库"；先建题库再进入维护其题目）
+model QuestionBank {
+  id          Int      @id @default(autoincrement())
+  /// 题库名称（2-50 字，全局唯一）
+  name        String   @unique @db.VarChar(50)
+  /// 题库编码（≤30 字，全局唯一；新增留空时由系统自动生成）
+  code        String   @unique @db.VarChar(30)
+  /// 题库描述（≤200 字，可空）
+  description String?  @db.VarChar(200)
+  /// 状态 1=启用 0=停用（停用后组卷/抽题/练习不展示，历史引用不受影响）
+  status      Int      @default(1)
+  /// 租户 ID
+  tenantId    Int?
+  /// 创建时间
+  createTime  DateTime @default(now())
+  /// 更新时间
+  updateTime  DateTime @updatedAt
+
+  /// 本题库下的题目（一对多，反向关系）
+  questions Question[]
+
+  @@index([tenantId])
+  @@map("exam_question_bank")
+}

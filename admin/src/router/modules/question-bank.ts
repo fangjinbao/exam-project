@@ -18,11 +18,20 @@ export const questionBankRoutes: AppRouteRecord = {
     {
       path: '',
       name: 'QuestionBankIndex',
-      component: () => import('@/views/question-bank/knowledge-point/index.vue'),
+      component: () => import('@/views/question-bank/list/index.vue'),
       meta: {
-        title: 'menus.questionBank.knowledgePoint',
+        title: 'menus.questionBank.list',
         keepAlive: true,
         isHide: true
+      }
+    },
+    {
+      path: 'list',
+      name: 'QuestionBankList',
+      component: () => import('@/views/question-bank/list/index.vue'),
+      meta: {
+        title: 'menus.questionBank.list',
+        keepAlive: true
       }
     },
     {
@@ -32,6 +41,17 @@ export const questionBankRoutes: AppRouteRecord = {
       meta: {
         title: 'menus.questionBank.knowledgePoint',
         keepAlive: true
+      }
+    },
+    {
+      // 题目管理：进入题库后的子页（bankId/name 走 query），侧边栏隐藏
+      path: 'questions',
+      name: 'QuestionBankQuestions',
+      component: () => import('@/views/question-bank/questions/index.vue'),
+      meta: {
+        title: 'menus.questionBank.questions',
+        keepAlive: false,
+        isHide: true
       }
     }
   ]
