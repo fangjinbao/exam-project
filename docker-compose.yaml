@@ -70,7 +70,7 @@ services:
       TZ: "Asia/Shanghai"
       NODE_ENV: "production"
       SERVER_PORT: "9001"
-      DATABASE_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}?charset=utf8mb4"
+      DATABASE_URL: "mysql://${MYSQL_USER:-agentpm}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-agentpm}?charset=utf8mb4"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"

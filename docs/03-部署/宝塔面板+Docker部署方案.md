@@ -127,14 +127,13 @@ vi .env            # 或用宝塔「文件」编辑器打开
 
 | 变量 | 改成什么 |
 |------|----------|
-| `IMAGE_OWNER` | 你的 GitHub 用户名（小写），决定从谁的 GHCR 下载镜像 |
 | `MYSQL_ROOT_PASSWORD` | MySQL root 密码，强密码（纯字母数字） |
 | `MYSQL_PASSWORD` | 应用库密码，强密码 |
 | `REDIS_PASSWORD` | Redis 密码，**不能留空** |
 | `JWT_SECRET` | JWT 密钥，用 `openssl rand -hex 32` 生成一串填进去 |
 
-> `MYSQL_DATABASE`/`MYSQL_USER` 保持默认 `agentpm`。
-> **不用在 `.env` 里填域名**——网关按端口分流，域名只在第 6 步宝塔里填。以后换域名只改宝塔，这里不用动。
+> `.env.example` 里只有这 4 个密码，填完即可，不用填域名（网关按端口分流，域名只在第 6 步宝塔里填）。
+> **只有你 fork 到自己账号的情况**，才需要在 `.env` 末尾手动加一行 `IMAGE_OWNER=你的GitHub用户名（小写）`，好让服务器从你自己的 GHCR 下载镜像；直接用本仓库的不用加。
 
 ### 第 4 步：下载镜像并启动
 
