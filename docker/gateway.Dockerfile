@@ -33,4 +33,5 @@ RUN chmod +x /docker-entrypoint.d/40-render-frontends.sh
 # 所有前端静态产物：/usr/share/nginx/html/<name>
 COPY --from=builder /out /usr/share/nginx/html
 
-EXPOSE 80
+# 按端口分流：每个前端一个端口（与 docker/frontends.json 的 port 对应）。新增前端时补上对应端口。
+EXPOSE 8080 8081

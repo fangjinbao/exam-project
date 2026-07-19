@@ -1,10 +1,11 @@
 # 单前端 server 块模板。占位符由 gateway-entrypoint.sh 替换：
-#   __SERVER_NAME__  该前端对外域名（来自 .env，如 admin.xxx.com）
+#   __PORT__         该前端在网关内监听的端口（来自 frontends.json，如 8080、8081）
 #   __NAME__         前端名（= 静态产物目录 /usr/share/nginx/html/<name>）
 #   __API_PREFIX__   反代到后端的路径前缀（来自 frontends.json，如 /admin、/api）
+# 按端口分流：每个前端独占一个端口，不依赖域名。宝塔各子域名反代到对应端口即可。
 server {
-    listen 80;
-    server_name __SERVER_NAME__;
+    listen __PORT__ default_server;
+    server_name _;
 
     # 前端静态文件（构建产物已 COPY 进镜像）
     location / {

@@ -113,13 +113,12 @@ services:
     restart: unless-stopped
     environment:
       TZ: "Asia/Shanghai"
-      # 各前端对外域名（供启动时渲染 nginx server_name）。宝塔各子域名均反代到本容器端口。
-      ADMIN_DOMAIN: "${ADMIN_DOMAIN}"
-      MOBILE_DOMAIN: "${MOBILE_DOMAIN}"
     ports:
-      # 仅绑本机回环：给宝塔 Nginx 反代用，不对公网暴露。
-      # 宝塔各子域名（admin.xxx / m.xxx）统一反代到此端口，网关按 Host 分流。
-      - "127.0.0.1:${GATEWAY_HTTP_PORT:-8080}:80"
+      # 按端口分流：每个前端一个端口，仅绑本机回环（给宝塔反代用，不对公网暴露）。
+      # 端口与 docker/frontends.json 里各前端的 port 一一对应。
+      # 宝塔为每个子域名建站，反代到对应端口即可（admin.xxx → 8080，m.xxx → 8081）。
+      - "127.0.0.1:8080:8080"   # admin 管理后台
+      - "127.0.0.1:8081:8081"   # mobile 移动端 H5
     depends_on:
       backend:
         # 等后端健康（含 prisma 迁移完成）再起网关，避免首次部署反代到未就绪后端导致 502
